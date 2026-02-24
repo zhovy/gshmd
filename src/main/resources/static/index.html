@@ -125,7 +125,8 @@
         let allPosts = [];
         let commentsData = {};
         let currentPage = 0;
-        const PAGE_SIZE = 20; // 每页加载 20 条
+        // 根据屏幕宽度动态设置每页数量
+        const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20; // 电脑 50 条，手机 20 条
         let isLoading = false;
         let hasMore = true;
         let searchKeyword = '';
