@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.example.viewer.mapper.PostMapper">
+
+    <select id="listRoot" resultType="com.example.viewer.entity.Post">
+        SELECT id, content, created_at
+        FROM posts
+        WHERE parent_id IS NULL
+          AND status = 1
+          AND is_hide = 0
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="search" resultType="com.example.viewer.entity.Post">
+        SELECT id, content, created_at
+        FROM posts
+        WHERE parent_id IS NULL
+          AND content LIKE CONCAT('%', #{kw}, '%')
+    </select>
+
+    <select id="findById" resultType="com.example.viewer.entity.Post">
+        SELECT * FROM posts WHERE id = #{id}
+    </select>
+
+    <select id="listComments" resultType="com.example.viewer.entity.Post">
+        SELECT id, content, created_at, from_id
+        FROM posts
+        WHERE root_id = #{rootId}
+          AND parent_id IS NOT NULL
+          AND status = 1
+        ORDER BY created_at
+    </select>
+
+</mapper>

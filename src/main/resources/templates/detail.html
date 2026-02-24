@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h2>主贴</h2>
+<pre th:text="${post.content}"></pre>
+<pre th:text="${post.createdAt}"></pre>
+
+<hr>
+
+<h3>评论</h3>
+<div th:each="c : ${comments}">
+    <pre th:text="${c.content}"></pre>
+    <small th:text="${c.createdAt}"></small>
+    <hr>
+</div>
+
+</body>
+</html>

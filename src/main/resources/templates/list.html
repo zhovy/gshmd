@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<form>
+    <input name="kw" placeholder="搜索内容"/>
+    <button>搜索</button>
+</form>
+
+<hr>
+
+<div th:each="p : ${list}">
+    <a th:href="@{'/posts/' + ${p.id}}">
+        <pre th:text="${#strings.abbreviate(p.content,120)}"></pre>
+    </a>
+    <small th:text="${p.createdAt}"></small>
+    <hr>
+</div>
+
+</body>
+</html>

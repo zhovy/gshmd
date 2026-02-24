@@ -1,0 +1,25 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/gshmd.vip?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+
+  thymeleaf:
+    cache: false
+
+mybatis:
+  log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+server:
+  port: 8080
+
+
+# ????
+logging:
+  level:
+    com.example.viewer.mapper: debug  # ????? Mapper SQL
+    org.mybatis: debug                  # ?? MyBatis ????
+
