@@ -92,6 +92,13 @@
             color: #666;
         }
         
+        .loading-more {
+            text-align: center;
+            padding: 20px;
+            color: #999;
+            font-size: 14px;
+        }
+        
         /* 移动端优化 */
         @media (max-width: 480px) {
             body { padding: 10px; }
@@ -111,14 +118,17 @@
             <button onclick="search()">搜索</button>
         </div>
         
-        <div id="postList">
-            <div class="loading">加载中...</div>
-        </div>
+        <div id="postList"></div>
     </div>
 
     <script>
         let allPosts = [];
         let commentsData = {};
+        let currentPage = 0;
+        const PAGE_SIZE = 20; // 每页加载 20 条
+        let isLoading = false;
+        let hasMore = true;
+        let searchKeyword = '';
 
         async function loadData() {
             try {
@@ -129,8 +139,13 @@
                 const data = await response.json();
                 allPosts = data.posts || [];
                 commentsData = data.comments || {};
-                console.log('加载成功，帖子数：' + allPosts.length);
-                renderPosts(allPosts);
+                console.log('加载成功，总帖子数：' + allPosts.length);
+                
+                // 加载第一页
+                loadMore();
+                
+                // 绑定滚动事件
+                window.addEventListener('scroll', handleScroll);
             } catch (e) {
                 console.error('加载失败:', e);
                 document.getElementById('postList').innerHTML =
@@ -138,27 +153,93 @@
             }
         }
 
-        function renderPosts(posts) {
-            const container = document.getElementById('postList');
+        function handleScroll() {
+            // 距离底部 100px 时加载更多
+            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+                if (!isLoading && hasMore) {
+                    loadMore();
+                }
+            }
+        }
 
-            if (!posts || posts.length === 0) {
-                container.innerHTML = '<div class="no-results">没有找到相关帖子</div>';
+        function loadMore() {
+            if (isLoading || !hasMore) return;
+            
+            isLoading = true;
+            const start = currentPage * PAGE_SIZE;
+            const end = start + PAGE_SIZE;
+            
+            // 根据是否搜索决定数据源
+            let sourcePosts = searchKeyword ? filteredPosts : allPosts;
+            
+            const pagePosts = sourcePosts.slice(start, end);
+            
+            if (pagePosts.length === 0) {
+                hasMore = false;
+                removeLoadingIndicator();
+                isLoading = false;
                 return;
             }
-
-            container.innerHTML = '<ul class="post-list">' +
-                posts.map(post => {
-                    const commentCount = (commentsData[post.id] || []).length;
-                    return `
-                    <li class="post-item">
-                        <a href="post.html?id=${post.id}">
-                            <div class="post-content">${escapeHtml(abbreviate(post.content, 120))}</div>
-                            <div class="post-date">${formatDate(post.createdAt)} · ${commentCount}条评论</div>
-                        </a>
-                    </li>
-                `}).join('') +
-                '</ul>';
+            
+            // 显示加载指示器
+            showLoadingIndicator();
+            
+            // 模拟延迟，让用户看到加载效果（可选）
+            setTimeout(() => {
+                appendPosts(pagePosts);
+                currentPage++;
+                hasMore = end < sourcePosts.length;
+                removeLoadingIndicator();
+                isLoading = false;
+                console.log('加载第' + currentPage + '页，共' + pagePosts.length + '条');
+            }, 100);
         }
+
+        function appendPosts(posts) {
+            const container = document.getElementById('postList');
+            const ul = container.querySelector('.post-list') || createPostList();
+            
+            posts.forEach(post => {
+                const commentCount = (commentsData[post.id] || []).length;
+                const li = document.createElement('li');
+                li.className = 'post-item';
+                li.innerHTML = `
+                    <a href="post.html?id=${post.id}">
+                        <div class="post-content">${escapeHtml(abbreviate(post.content, 120))}</div>
+                        <div class="post-date">${formatDate(post.createdAt)} · ${commentCount}条评论</div>
+                    </a>
+                `;
+                ul.appendChild(li);
+            });
+            
+            if (!container.contains(ul)) {
+                container.appendChild(ul);
+            }
+        }
+
+        function createPostList() {
+            const ul = document.createElement('ul');
+            ul.className = 'post-list';
+            return ul;
+        }
+
+        function showLoadingIndicator() {
+            const container = document.getElementById('postList');
+            if (!container.querySelector('.loading-more')) {
+                const div = document.createElement('div');
+                div.className = 'loading-more';
+                div.textContent = '加载中...';
+                container.appendChild(div);
+            }
+        }
+
+        function removeLoadingIndicator() {
+            const loading = document.getElementById('postList').querySelector('.loading-more');
+            if (loading) loading.remove();
+        }
+
+        // 搜索结果的临时存储
+        let filteredPosts = [];
 
         function search() {
             const input = document.getElementById('searchInput');
@@ -166,19 +247,35 @@
             
             // 空搜索显示全部
             if (!kw) {
-                renderPosts(allPosts);
+                searchKeyword = '';
+                filteredPosts = [];
+                resetPostList();
+                currentPage = 0;
+                hasMore = true;
+                loadMore();
                 return;
             }
             
             // 使用更兼容的搜索方式
             const searchLower = kw.toLowerCase();
-            const filtered = allPosts.filter(post => {
+            filteredPosts = allPosts.filter(post => {
                 const content = post.content || '';
                 return content.toLowerCase().indexOf(searchLower) !== -1;
             });
             
-            console.log('搜索关键词："'+kw+'", 结果：'+filtered.length+'条');
-            renderPosts(filtered);
+            searchKeyword = kw;
+            console.log('搜索关键词："'+kw+'", 结果：'+filteredPosts.length+'条');
+            
+            // 重置列表并加载搜索结果
+            resetPostList();
+            currentPage = 0;
+            hasMore = true;
+            loadMore();
+        }
+
+        function resetPostList() {
+            const container = document.getElementById('postList');
+            container.innerHTML = '';
         }
 
         // 支持回车搜索
