@@ -3,14 +3,16 @@ package com.example.viewer;
 import com.example.viewer.entity.Post;
 import com.example.viewer.mapper.PostMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import org.springframework.boot.SpringApplication;
 import org.springframework.context.ConfigurableApplicationContext;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,7 +26,11 @@ public class ExportData {
         ConfigurableApplicationContext context = SpringApplication.run(GshmdApplication.class, args);
         PostMapper mapper = context.getBean(PostMapper.class);
         ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        
+        // 配置 Java 8 时间支持
+        JavaTimeModule javaTimeModule = new JavaTimeModule();
+        javaTimeModule.addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+        objectMapper.registerModule(javaTimeModule);
 
         // 导出主贴列表
         List<Post> rootPosts = mapper.listRoot();
