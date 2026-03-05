@@ -51,6 +51,10 @@
             -webkit-appearance: none;
         }
         .search-box button:active { background: #0056b3; }
+        .search-box .reset-btn {
+            background: #6c757d;
+        }
+        .search-box .reset-btn:active { background: #545b62; }
 
         /* 搜索历史 */
         .search-history {
@@ -170,6 +174,7 @@
         <div class="search-box">
             <input type="text" v-model="keyword" placeholder="搜索内容..." @keyup.enter="search" />
             <button @click="search">搜索</button>
+            <button class="reset-btn" @click="reset" title="返回首页">↻ 重置</button>
         </div>
 
         <!-- 搜索历史 -->
@@ -300,6 +305,12 @@
                     updateURL()
                 }
 
+                const reset = () => {
+                    keyword.value = ''
+                    currentPage.value = 0
+                    updateURL()
+                }
+
                 const abbreviate = (str, len) => {
                     if (!str) return ''
                     return str.length > len ? str.substring(0, len) + '...' : str
@@ -409,6 +420,7 @@
                     currentPagePosts,
                     searchHistory,
                     search,
+                    reset,
                     selectHistory,
                     removeHistory,
                     clearHistory,
