@@ -24,7 +24,7 @@
         .search-box {
             display: flex;
             gap: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         .search-box input {
             flex: 1;
@@ -51,6 +51,58 @@
             -webkit-appearance: none;
         }
         .search-box button:active { background: #0056b3; }
+
+        /* 搜索历史 */
+        .search-history {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 12px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+        }
+        .search-history-title {
+            font-size: 13px;
+            color: #999;
+            margin-right: 8px;
+            display: flex;
+            align-items: center;
+        }
+        .history-tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            background: #e9ecef;
+            color: #495057;
+            border-radius: 16px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .history-tag:hover {
+            background: #007bff;
+            color: white;
+        }
+        .history-tag .remove {
+            margin-left: 6px;
+            font-size: 14px;
+            opacity: 0.6;
+        }
+        .history-tag .remove:hover {
+            opacity: 1;
+        }
+        .clear-history {
+            margin-left: auto;
+            font-size: 13px;
+            color: #999;
+            cursor: pointer;
+            padding: 6px 12px;
+        }
+        .clear-history:hover {
+            color: #dc3545;
+        }
 
         .post-list { list-style: none; }
         .post-item {
@@ -105,6 +157,9 @@
             .search-box input { font-size: 14px; padding: 10px 12px; }
             .search-box button { font-size: 14px; padding: 10px 16px; }
             .post-content { font-size: 14px; }
+            .search-history { flex-wrap: wrap; }
+            .search-history-title { width: 100%; margin-bottom: 8px; }
+            .clear-history { width: 100%; text-align: center; margin-left: 0; }
         }
     </style>
 </head>
@@ -115,6 +170,21 @@
         <div class="search-box">
             <input type="text" v-model="keyword" placeholder="搜索内容..." @keyup.enter="search" />
             <button @click="search">搜索</button>
+        </div>
+
+        <!-- 搜索历史 -->
+        <div v-if="searchHistory.length > 0 && !keyword" class="search-history">
+            <span class="search-history-title">🔥 历史搜索：</span>
+            <span 
+                v-for="(item, index) in searchHistory" 
+                :key="index"
+                class="history-tag"
+                @click="selectHistory(item)"
+            >
+                {{ item }}
+                <span class="remove" @click.stop="removeHistory(index)" title="删除">✕</span>
+            </span>
+            <span class="clear-history" @click="clearHistory">清空历史</span>
         </div>
 
         <ul class="post-list">
@@ -137,6 +207,9 @@
     <script>
         const { createApp, ref, computed, onMounted, watch } = Vue
 
+        const STORAGE_KEY = 'gshmd_search_history'
+        const MAX_HISTORY = 10
+
         createApp({
             setup() {
                 const allPosts = ref([])
@@ -145,6 +218,7 @@
                 const loading = ref(false)
                 const currentPage = ref(0)
                 const loaded = ref(false)
+                const searchHistory = ref([])
 
                 const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20
 
@@ -166,7 +240,62 @@
                     return (comments.value[postId] || []).length
                 }
 
+                // 搜索历史管理
+                const loadHistory = () => {
+                    try {
+                        const saved = localStorage.getItem(STORAGE_KEY)
+                        if (saved) {
+                            searchHistory.value = JSON.parse(saved)
+                        }
+                    } catch (e) {
+                        console.error('加载搜索历史失败:', e)
+                    }
+                }
+
+                const saveHistory = () => {
+                    try {
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(searchHistory.value))
+                    } catch (e) {
+                        console.error('保存搜索历史失败:', e)
+                    }
+                }
+
+                const addToHistory = (kw) => {
+                    if (!kw.trim()) return
+                    // 移除已存在的相同关键词（移到最前面）
+                    const index = searchHistory.value.indexOf(kw)
+                    if (index !== -1) {
+                        searchHistory.value.splice(index, 1)
+                    }
+                    // 添加到开头
+                    searchHistory.value.unshift(kw)
+                    // 限制数量
+                    if (searchHistory.value.length > MAX_HISTORY) {
+                        searchHistory.value.pop()
+                    }
+                    saveHistory()
+                }
+
+                const removeHistory = (index) => {
+                    searchHistory.value.splice(index, 1)
+                    saveHistory()
+                }
+
+                const clearHistory = () => {
+                    searchHistory.value = []
+                    localStorage.removeItem(STORAGE_KEY)
+                }
+
+                const selectHistory = (kw) => {
+                    keyword.value = kw
+                    search()
+                }
+
                 const search = () => {
+                    const kw = keyword.value.trim()
+                    if (kw) {
+                        addToHistory(kw)
+                    }
                     currentPage.value = 0
                     updateURL()
                 }
@@ -218,7 +347,6 @@
                 const getPostLink = (postId) => {
                     const url = new URL('post.html', window.location)
                     url.searchParams.set('id', postId)
-                    // 保存当前状态到 URL，返回时可以恢复
                     if (keyword.value.trim()) {
                         url.searchParams.set('q', keyword.value)
                         url.searchParams.set('page', currentPage.value)
@@ -227,14 +355,12 @@
                 }
 
                 const navigateToPost = (postId) => {
-                    // 保存当前状态到 sessionStorage
                     sessionStorage.setItem('gshmd_keyword', keyword.value)
                     sessionStorage.setItem('gshmd_page', currentPage.value.toString())
                     window.location.href = getPostLink(postId)
                 }
 
                 const restoreState = () => {
-                    // 1. 先从 URL 参数恢复
                     const params = new URLSearchParams(window.location.search)
                     const urlKeyword = params.get('q')
                     const urlPage = params.get('page')
@@ -246,7 +372,6 @@
                         currentPage.value = parseInt(urlPage, 10)
                     }
 
-                    // 2. 如果没有 URL 参数，尝试从 sessionStorage 恢复（从详情页返回时）
                     if (!urlKeyword) {
                         const savedKeyword = sessionStorage.getItem('gshmd_keyword')
                         if (savedKeyword) {
@@ -256,7 +381,7 @@
                 }
 
                 onMounted(async () => {
-                    // 恢复之前的搜索状态
+                    loadHistory()
                     restoreState()
 
                     try {
@@ -271,7 +396,6 @@
                     }
                 })
 
-                // 监听搜索词变化，自动更新 URL
                 watch(keyword, () => {
                     if (loaded.value) {
                         updateURL()
@@ -283,7 +407,11 @@
                     loading,
                     displayPosts,
                     currentPagePosts,
+                    searchHistory,
                     search,
+                    selectHistory,
+                    removeHistory,
+                    clearHistory,
                     getCommentCount,
                     abbreviate,
                     formatDate,
