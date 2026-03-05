@@ -11,7 +11,7 @@
 
 ## 🚀 在线访问
 
-[GitHub Pages](https://你的用户名.github.io/gshmd/)
+[GitHub Pages](https://zhovy.github.io/gshmd/)
 
 ## 🛠 本地开发
 
