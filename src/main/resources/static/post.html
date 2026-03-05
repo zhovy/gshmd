@@ -13,7 +13,7 @@
             line-height: 1.6;
         }
         .container { max-width: 800px; margin: 0 auto; }
-        
+
         .back-link {
             display: inline-block;
             margin-bottom: 20px;
@@ -21,7 +21,7 @@
             text-decoration: none;
         }
         .back-link:hover { text-decoration: underline; }
-        
+
         .main-post {
             background: white;
             border-radius: 8px;
@@ -47,7 +47,7 @@
             padding-top: 16px;
             border-top: 1px solid #eee;
         }
-        
+
         .comments {
             background: white;
             border-radius: 8px;
@@ -74,7 +74,7 @@
             color: #999;
             margin-top: 8px;
         }
-        
+
         .loading, .not-found {
             text-align: center;
             padding: 40px;
@@ -83,85 +83,93 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="app">
         <a href="index.html" class="back-link">← 返回列表</a>
-        
-        <div id="postContainer">
-            <div class="loading">加载中...</div>
-        </div>
+
+        <div v-if="loading" class="loading">加载中...</div>
+
+        <div v-else-if="notFound" class="not-found">{{ notFoundMessage }}</div>
+
+        <template v-else-if="post">
+            <div class="main-post">
+                <h2>主贴</h2>
+                <div class="post-content">{{ post.content }}</div>
+                <div class="post-date">{{ formatDate(post.createdAt) }}</div>
+            </div>
+
+            <div class="comments">
+                <h3>评论 ({{ comments.length }})</h3>
+                <p v-if="comments.length === 0" style="color:#999">暂无评论</p>
+                <div v-for="comment in comments" :key="comment.id" class="comment">
+                    <div class="comment-content">{{ comment.content }}</div>
+                    <div class="comment-date">{{ formatDate(comment.createdAt) }}</div>
+                </div>
+            </div>
+        </template>
     </div>
 
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-        async function loadPost() {
-            const params = new URLSearchParams(window.location.search);
-            const postId = params.get('id');
-            
-            if (!postId) {
-                document.getElementById('postContainer').innerHTML = 
-                    '<div class="not-found">请提供帖子 ID</div>';
-                return;
-            }
-            
-            try {
-                const response = await fetch('data.json');
-                const data = await response.json();
-                
-                const post = (data.posts || []).find(p => p.id === postId);
-                const comments = (data.comments || {})[postId] || [];
-                
-                if (!post) {
-                    document.getElementById('postContainer').innerHTML = 
-                        '<div class="not-found">帖子不存在</div>';
-                    return;
+        const { createApp, ref, onMounted } = Vue
+
+        createApp({
+            setup() {
+                const post = ref(null)
+                const comments = ref([])
+                const loading = ref(true)
+                const notFound = ref(false)
+                const notFoundMessage = ref('')
+
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return ''
+                    try {
+                        return new Date(dateStr).toLocaleString('zh-CN')
+                    } catch (e) {
+                        return dateStr
+                    }
                 }
-                
-                renderPost(post, comments);
-            } catch (e) {
-                document.getElementById('postContainer').innerHTML = 
-                    '<div class="not-found">加载失败，请稍后重试</div>';
-                console.error(e);
+
+                onMounted(async () => {
+                    const params = new URLSearchParams(window.location.search)
+                    const postId = params.get('id')
+
+                    if (!postId) {
+                        notFound.value = true
+                        notFoundMessage.value = '请提供帖子 ID'
+                        loading.value = false
+                        return
+                    }
+
+                    try {
+                        const res = await fetch('data.json')
+                        const data = await res.json()
+
+                        post.value = (data.posts || []).find(p => p.id === postId)
+                        comments.value = (data.comments || {})[postId] || []
+
+                        if (!post.value) {
+                            notFound.value = true
+                            notFoundMessage.value = '帖子不存在'
+                        }
+                    } catch (e) {
+                        notFound.value = true
+                        notFoundMessage.value = '加载失败，请稍后重试'
+                        console.error(e)
+                    } finally {
+                        loading.value = false
+                    }
+                })
+
+                return {
+                    post,
+                    comments,
+                    loading,
+                    notFound,
+                    notFoundMessage,
+                    formatDate
+                }
             }
-        }
-        
-        function renderPost(post, comments) {
-            const html = `
-                <div class="main-post">
-                    <h2>主贴</h2>
-                    <div class="post-content">${escapeHtml(post.content)}</div>
-                    <div class="post-date">${formatDate(post.createdAt)}</div>
-                </div>
-                
-                <div class="comments">
-                    <h3>评论 (${comments.length})</h3>
-                    ${comments.length === 0 ? '<p style="color:#999">暂无评论</p>' : ''}
-                    ${comments.map(c => `
-                        <div class="comment">
-                            <div class="comment-content">${escapeHtml(c.content)}</div>
-                            <div class="comment-date">${formatDate(c.createdAt)}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-            document.getElementById('postContainer').innerHTML = html;
-        }
-        
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        function formatDate(dateStr) {
-            if (!dateStr) return '';
-            try {
-                const date = new Date(dateStr);
-                return date.toLocaleString('zh-CN');
-            } catch (e) {
-                return dateStr;
-            }
-        }
-        
-        loadPost();
+        }).mount('#app')
     </script>
 </body>
 </html>

@@ -14,9 +14,9 @@
             min-height: 100vh;
         }
         .container { max-width: 800px; margin: 0 auto; }
-        h1 { 
-            text-align: center; 
-            margin-bottom: 15px; 
+        h1 {
+            text-align: center;
+            margin-bottom: 15px;
             color: #333;
             font-size: 24px;
         }
@@ -91,15 +91,14 @@
             padding: 40px 20px;
             color: #666;
         }
-        
+
         .loading-more {
             text-align: center;
             padding: 20px;
             color: #999;
             font-size: 14px;
         }
-        
-        /* 移动端优化 */
+
         @media (max-width: 480px) {
             body { padding: 10px; }
             h1 { font-size: 20px; }
@@ -110,214 +109,189 @@
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="container" id="app">
         <h1>📋 帖子列表</h1>
-        
+
         <div class="search-box">
-            <input type="text" id="searchInput" placeholder="搜索内容..." />
-            <button onclick="search()">搜索</button>
+            <input type="text" v-model="keyword" placeholder="搜索内容..." @keyup.enter="search" />
+            <button @click="search">搜索</button>
         </div>
-        
-        <div id="postList"></div>
+
+        <ul class="post-list">
+            <li v-for="post in currentPagePosts" :key="post.id" class="post-item">
+                <a :href="getPostLink(post.id)" @click.prevent="navigateToPost(post.id)">
+                    <div class="post-content">{{ abbreviate(post.content, 120) }}</div>
+                    <div class="post-date">{{ formatDate(post.createdAt) }} · {{ getCommentCount(post.id) }}条评论</div>
+                </a>
+            </li>
+        </ul>
+
+        <div v-if="loading" class="loading-more">加载中...</div>
+
+        <div v-if="displayPosts.length === 0 && !loading" class="no-results">
+            暂无内容
+        </div>
     </div>
 
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <script>
-        let allPosts = [];
-        let commentsData = {};
-        let currentPage = 0;
-        // 根据屏幕宽度动态设置每页数量
-        const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20; // 电脑 50 条，手机 20 条
-        let isLoading = false;
-        let hasMore = true;
-        let searchKeyword = '';
+        const { createApp, ref, computed, onMounted, watch } = Vue
 
-        async function loadData() {
-            try {
-                const response = await fetch('data.json');
-                if (!response.ok) {
-                    throw new Error('HTTP ' + response.status);
+        createApp({
+            setup() {
+                const allPosts = ref([])
+                const comments = ref({})
+                const keyword = ref('')
+                const loading = ref(false)
+                const currentPage = ref(0)
+                const loaded = ref(false)
+
+                const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20
+
+                const displayPosts = computed(() => {
+                    if (!keyword.value.trim()) {
+                        return allPosts.value
+                    }
+                    const kw = keyword.value.toLowerCase()
+                    return allPosts.value.filter(p => (p.content || '').toLowerCase().includes(kw))
+                })
+
+                const currentPagePosts = computed(() => {
+                    const start = currentPage.value * PAGE_SIZE
+                    const end = start + PAGE_SIZE
+                    return displayPosts.value.slice(start, end)
+                })
+
+                const getCommentCount = (postId) => {
+                    return (comments.value[postId] || []).length
                 }
-                const data = await response.json();
-                allPosts = data.posts || [];
-                commentsData = data.comments || {};
-                console.log('加载成功，总帖子数：' + allPosts.length);
-                
-                // 加载第一页
-                loadMore();
-                
-                // 绑定滚动事件
-                window.addEventListener('scroll', handleScroll);
-            } catch (e) {
-                console.error('加载失败:', e);
-                document.getElementById('postList').innerHTML =
-                    '<div class="no-results">加载失败，请稍后重试<br/><small>' + e.message + '</small></div>';
-            }
-        }
 
-        function handleScroll() {
-            // 距离底部 100px 时加载更多
-            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
-                if (!isLoading && hasMore) {
-                    loadMore();
+                const search = () => {
+                    currentPage.value = 0
+                    updateURL()
+                }
+
+                const abbreviate = (str, len) => {
+                    if (!str) return ''
+                    return str.length > len ? str.substring(0, len) + '...' : str
+                }
+
+                const formatDate = (dateStr) => {
+                    if (!dateStr) return ''
+                    try {
+                        return new Date(dateStr).toLocaleString('zh-CN')
+                    } catch (e) {
+                        return dateStr
+                    }
+                }
+
+                const loadMore = () => {
+                    if (loading.value) return
+                    const start = currentPage.value * PAGE_SIZE
+                    const end = start + PAGE_SIZE
+                    if (end >= displayPosts.value.length) return
+
+                    loading.value = true
+                    setTimeout(() => {
+                        currentPage.value++
+                        loading.value = false
+                    }, 100)
+                }
+
+                const handleScroll = () => {
+                    if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+                        loadMore()
+                    }
+                }
+
+                // URL 管理搜索状态
+                const updateURL = () => {
+                    const url = new URL(window.location)
+                    if (keyword.value.trim()) {
+                        url.searchParams.set('q', keyword.value)
+                    } else {
+                        url.searchParams.delete('q')
+                    }
+                    history.replaceState({}, '', url)
+                }
+
+                const getPostLink = (postId) => {
+                    const url = new URL('post.html', window.location)
+                    url.searchParams.set('id', postId)
+                    // 保存当前状态到 URL，返回时可以恢复
+                    if (keyword.value.trim()) {
+                        url.searchParams.set('q', keyword.value)
+                        url.searchParams.set('page', currentPage.value)
+                    }
+                    return url.href
+                }
+
+                const navigateToPost = (postId) => {
+                    // 保存当前状态到 sessionStorage
+                    sessionStorage.setItem('gshmd_keyword', keyword.value)
+                    sessionStorage.setItem('gshmd_page', currentPage.value.toString())
+                    window.location.href = getPostLink(postId)
+                }
+
+                const restoreState = () => {
+                    // 1. 先从 URL 参数恢复
+                    const params = new URLSearchParams(window.location.search)
+                    const urlKeyword = params.get('q')
+                    const urlPage = params.get('page')
+
+                    if (urlKeyword) {
+                        keyword.value = urlKeyword
+                    }
+                    if (urlPage) {
+                        currentPage.value = parseInt(urlPage, 10)
+                    }
+
+                    // 2. 如果没有 URL 参数，尝试从 sessionStorage 恢复（从详情页返回时）
+                    if (!urlKeyword) {
+                        const savedKeyword = sessionStorage.getItem('gshmd_keyword')
+                        if (savedKeyword) {
+                            keyword.value = savedKeyword
+                        }
+                    }
+                }
+
+                onMounted(async () => {
+                    // 恢复之前的搜索状态
+                    restoreState()
+
+                    try {
+                        const res = await fetch('data.json')
+                        const data = await res.json()
+                        allPosts.value = data.posts || []
+                        comments.value = data.comments || {}
+                        loaded.value = true
+                        window.addEventListener('scroll', handleScroll)
+                    } catch (e) {
+                        console.error('加载失败:', e)
+                    }
+                })
+
+                // 监听搜索词变化，自动更新 URL
+                watch(keyword, () => {
+                    if (loaded.value) {
+                        updateURL()
+                    }
+                })
+
+                return {
+                    keyword,
+                    loading,
+                    displayPosts,
+                    currentPagePosts,
+                    search,
+                    getCommentCount,
+                    abbreviate,
+                    formatDate,
+                    getPostLink,
+                    navigateToPost
                 }
             }
-        }
-
-        function loadMore() {
-            if (isLoading || !hasMore) return;
-            
-            isLoading = true;
-            const start = currentPage * PAGE_SIZE;
-            const end = start + PAGE_SIZE;
-            
-            // 根据是否搜索决定数据源
-            let sourcePosts = searchKeyword ? filteredPosts : allPosts;
-            
-            const pagePosts = sourcePosts.slice(start, end);
-            
-            if (pagePosts.length === 0) {
-                hasMore = false;
-                removeLoadingIndicator();
-                isLoading = false;
-                return;
-            }
-            
-            // 显示加载指示器
-            showLoadingIndicator();
-            
-            // 模拟延迟，让用户看到加载效果（可选）
-            setTimeout(() => {
-                appendPosts(pagePosts);
-                currentPage++;
-                hasMore = end < sourcePosts.length;
-                removeLoadingIndicator();
-                isLoading = false;
-                console.log('加载第' + currentPage + '页，共' + pagePosts.length + '条');
-            }, 100);
-        }
-
-        function appendPosts(posts) {
-            const container = document.getElementById('postList');
-            const ul = container.querySelector('.post-list') || createPostList();
-            
-            posts.forEach(post => {
-                const commentCount = (commentsData[post.id] || []).length;
-                const li = document.createElement('li');
-                li.className = 'post-item';
-                li.innerHTML = `
-                    <a href="post.html?id=${post.id}">
-                        <div class="post-content">${escapeHtml(abbreviate(post.content, 120))}</div>
-                        <div class="post-date">${formatDate(post.createdAt)} · ${commentCount}条评论</div>
-                    </a>
-                `;
-                ul.appendChild(li);
-            });
-            
-            if (!container.contains(ul)) {
-                container.appendChild(ul);
-            }
-        }
-
-        function createPostList() {
-            const ul = document.createElement('ul');
-            ul.className = 'post-list';
-            return ul;
-        }
-
-        function showLoadingIndicator() {
-            const container = document.getElementById('postList');
-            if (!container.querySelector('.loading-more')) {
-                const div = document.createElement('div');
-                div.className = 'loading-more';
-                div.textContent = '加载中...';
-                container.appendChild(div);
-            }
-        }
-
-        function removeLoadingIndicator() {
-            const loading = document.getElementById('postList').querySelector('.loading-more');
-            if (loading) loading.remove();
-        }
-
-        // 搜索结果的临时存储
-        let filteredPosts = [];
-
-        function search() {
-            const input = document.getElementById('searchInput');
-            const kw = (input.value || '').trim();
-            
-            // 空搜索显示全部
-            if (!kw) {
-                searchKeyword = '';
-                filteredPosts = [];
-                resetPostList();
-                currentPage = 0;
-                hasMore = true;
-                loadMore();
-                return;
-            }
-            
-            // 使用更兼容的搜索方式
-            const searchLower = kw.toLowerCase();
-            filteredPosts = allPosts.filter(post => {
-                const content = post.content || '';
-                return content.toLowerCase().indexOf(searchLower) !== -1;
-            });
-            
-            searchKeyword = kw;
-            console.log('搜索关键词："'+kw+'", 结果：'+filteredPosts.length+'条');
-            
-            // 重置列表并加载搜索结果
-            resetPostList();
-            currentPage = 0;
-            hasMore = true;
-            loadMore();
-        }
-
-        function resetPostList() {
-            const container = document.getElementById('postList');
-            container.innerHTML = '';
-        }
-
-        // 支持回车搜索
-        const searchInput = document.getElementById('searchInput');
-        if (searchInput) {
-            searchInput.addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    search();
-                }
-            });
-        }
-
-        function abbreviate(str, len) {
-            if (!str) return '';
-            return str.length > len ? str.substring(0, len) + '...' : str;
-        }
-
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function formatDate(dateStr) {
-            if (!dateStr) return '';
-            try {
-                const date = new Date(dateStr);
-                return date.toLocaleString('zh-CN');
-            } catch (e) {
-                return dateStr;
-            }
-        }
-
-        // 页面加载完成后加载数据
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', loadData);
-        } else {
-            loadData();
-        }
+        }).mount('#app')
     </script>
 </body>
 </html>
