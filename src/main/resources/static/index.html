@@ -201,9 +201,10 @@
             </li>
         </ul>
 
-        <div v-if="loading" class="loading-more">加载中...</div>
+        <div v-if="loadingIndex" class="loading-more">加载索引中...</div>
+        <div v-else-if="loading" class="loading-more">加载中...</div>
 
-        <div v-if="displayPosts.length === 0 && !loading" class="no-results">
+        <div v-if="!loadingIndex && displayPosts.length === 0" class="no-results">
             暂无内容
         </div>
     </div>
@@ -214,25 +215,35 @@
 
         const STORAGE_KEY = 'gshmd_search_history'
         const MAX_HISTORY = 10
+        const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20
 
         createApp({
             setup() {
-                const allPosts = ref([])
-                const comments = ref({})
+                const searchIndex = ref([]) // 搜索索引（包含所有帖子的 id, content, createdAt）
+                const commentCounts = ref({})
                 const keyword = ref('')
                 const loading = ref(false)
+                const loadingIndex = ref(true)
                 const currentPage = ref(0)
+                const loadedPages = ref(new Set())
                 const loaded = ref(false)
                 const searchHistory = ref([])
-
-                const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20
+                const totalPages = ref(0)
 
                 const displayPosts = computed(() => {
                     if (!keyword.value.trim()) {
-                        return allPosts.value
+                        return searchIndex.value
                     }
                     const kw = keyword.value.toLowerCase()
-                    return allPosts.value.filter(p => (p.content || '').toLowerCase().includes(kw))
+                    return searchIndex.value.filter(p => {
+                        // 搜索主贴内容
+                        const contentMatch = (p.content || '').toLowerCase().includes(kw)
+                        // 搜索评论内容
+                        const commentMatch = (p.comments || []).some(c => 
+                            (c || '').toLowerCase().includes(kw)
+                        )
+                        return contentMatch || commentMatch
+                    })
                 })
 
                 const currentPagePosts = computed(() => {
@@ -242,7 +253,7 @@
                 })
 
                 const getCommentCount = (postId) => {
-                    return (comments.value[postId] || []).length
+                    return commentCounts.value[postId] || 0
                 }
 
                 // 搜索历史管理
@@ -267,14 +278,11 @@
 
                 const addToHistory = (kw) => {
                     if (!kw.trim()) return
-                    // 移除已存在的相同关键词（移到最前面）
                     const index = searchHistory.value.indexOf(kw)
                     if (index !== -1) {
                         searchHistory.value.splice(index, 1)
                     }
-                    // 添加到开头
                     searchHistory.value.unshift(kw)
-                    // 限制数量
                     if (searchHistory.value.length > MAX_HISTORY) {
                         searchHistory.value.pop()
                     }
@@ -396,14 +404,23 @@
                     restoreState()
 
                     try {
-                        const res = await fetch('data.json')
-                        const data = await res.json()
-                        allPosts.value = data.posts || []
-                        comments.value = data.comments || {}
+                        // 加载搜索索引（包含所有帖子，用于搜索）
+                        const indexRes = await fetch('search-index.json')
+                        searchIndex.value = await indexRes.json()
+                        console.log('加载搜索索引完成，帖子数:', searchIndex.value.length)
+
+                        // 加载主索引获取评论统计
+                        const mainIndexRes = await fetch('index.json')
+                        const mainIndex = await mainIndexRes.json()
+                        totalPages.value = mainIndex.totalPages
+                        commentCounts.value = mainIndex.comments || {}
+
                         loaded.value = true
                         window.addEventListener('scroll', handleScroll)
                     } catch (e) {
-                        console.error('加载失败:', e)
+                        console.error('加载索引失败:', e)
+                    } finally {
+                        loadingIndex.value = false
                     }
                 })
 
@@ -416,6 +433,7 @@
                 return {
                     keyword,
                     loading,
+                    loadingIndex,
                     displayPosts,
                     currentPagePosts,
                     searchHistory,

@@ -129,6 +129,31 @@
                     }
                 }
 
+                // 从搜索索引加载帖子基本信息
+                const loadFromSearchIndex = async (postId) => {
+                    try {
+                        const res = await fetch('search-index.json')
+                        const index = await res.json()
+                        const found = index.find(p => p.id === postId)
+                        return found
+                    } catch (e) {
+                        console.error('加载搜索索引失败:', e)
+                        return null
+                    }
+                }
+
+                // 加载评论
+                const loadComments = async (postId) => {
+                    try {
+                        const safeId = postId.replace('/', '_')
+                        const res = await fetch(`comments/${safeId}.json`)
+                        if (!res.ok) return []
+                        return await res.json()
+                    } catch (e) {
+                        return []
+                    }
+                }
+
                 onMounted(async () => {
                     const params = new URLSearchParams(window.location.search)
                     const postId = params.get('id')
@@ -141,15 +166,15 @@
                     }
 
                     try {
-                        const res = await fetch('data.json')
-                        const data = await res.json()
+                        // 从搜索索引加载（包含完整 content）
+                        const found = await loadFromSearchIndex(postId)
 
-                        post.value = (data.posts || []).find(p => p.id === postId)
-                        comments.value = (data.comments || {})[postId] || []
-
-                        if (!post.value) {
+                        if (!found) {
                             notFound.value = true
                             notFoundMessage.value = '帖子不存在'
+                        } else {
+                            post.value = found
+                            comments.value = await loadComments(postId)
                         }
                     } catch (e) {
                         notFound.value = true
