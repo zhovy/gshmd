@@ -11,9 +11,9 @@
         h1 { text-align: center; margin-bottom: 15px; color: #333; font-size: 24px; }
         .panel { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,.08); }
         .panel h2 { font-size: 16px; margin-bottom: 10px; color: #333; }
-        textarea, input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff; }
+        textarea, input[type="text"], input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff; }
         textarea { resize: vertical; min-height: 86px; }
-        .actions { display: flex; gap: 8px; margin-top: 8px; }
+        .actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
         button { padding: 10px 14px; background: #007bff; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
         .secondary { background: #6c757d; }
         .search-box { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -27,7 +27,11 @@
         .post-item a { text-decoration: none; color: #333; display: block; }
         .post-content { font-size: 15px; color: #444; white-space: pre-wrap; word-break: break-word; }
         .post-date { font-size: 12px; color: #999; margin-top: 10px; }
-        .loading-more,.no-results { text-align: center; padding: 20px; color: #999; }
+        .loading-more,.no-results,.sync-hint { text-align: center; padding: 20px; color: #999; }
+        .sync-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .sync-grid .full { grid-column: 1 / -1; }
+        .small { font-size: 12px; color: #888; margin-top: 6px; }
+        @media (max-width: 640px) { .sync-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -35,8 +39,23 @@
     <h1>📋 帖子列表</h1>
 
     <div class="panel">
-        <h2>✍️ 重新添加内容</h2>
-        <textarea v-model="newPostContent" maxlength="1000" placeholder="输入要发布的内容（仅保存在当前设备）"></textarea>
+        <h2>☁️ 文件同步（可选）</h2>
+        <div class="sync-grid">
+            <input v-model="syncConfig.gistId" type="text" placeholder="GitHub Gist ID（用于云端文件存储）" class="full">
+            <input v-model="syncConfig.filename" type="text" placeholder="文件名（默认 posts.json）">
+            <input v-model="syncConfig.token" type="password" placeholder="GitHub Token（gist scope）">
+        </div>
+        <div class="actions">
+            <button @click="saveSyncConfig">保存配置</button>
+            <button class="secondary" @click="loadCloudPosts">立即同步拉取</button>
+            <button class="secondary" @click="clearSyncConfig">清除配置</button>
+        </div>
+        <div class="small">{{ syncStatus }}</div>
+    </div>
+
+    <div class="panel">
+        <h2>✍️ 添加文章</h2>
+        <textarea v-model="newPostContent" maxlength="1000" placeholder="输入文章内容（会保存到浏览器，且可同步写入 Gist 文件）"></textarea>
         <div class="actions">
             <button @click="submitPost">发布内容</button>
             <button class="secondary" @click="newPostContent = ''">清空</button>
@@ -44,7 +63,7 @@
     </div>
 
     <div class="search-box">
-        <input type="text" v-model="keyword" placeholder="搜索内容（首次搜索会建立本地索引）" @keyup.enter="search" />
+        <input type="text" v-model="keyword" placeholder="搜索内容（按需扫描分页文件，避免一次性加载全部）" @keyup.enter="search" />
         <button @click="search">搜索</button>
         <button class="secondary" @click="reset">↻ 重置</button>
     </div>
@@ -76,8 +95,10 @@
 const { createApp, ref, computed, onMounted } = Vue
 
 const STORAGE_KEY = 'gshmd_search_history'
-const LOCAL_POSTS_KEY = 'gshmd_local_posts_v1'
+const LOCAL_POSTS_KEY = 'gshmd_local_posts_v2'
 const LOCAL_COMMENTS_KEY = 'gshmd_local_comments_v1'
+const CLOUD_POSTS_KEY = 'gshmd_cloud_posts_v1'
+const SYNC_CONFIG_KEY = 'gshmd_gist_sync_v1'
 const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20
 
 createApp({
@@ -86,119 +107,198 @@ createApp({
         const searchHistory = ref([])
         const loading = ref(false)
         const allPosts = ref([])
-        const searchIndex = ref(null)
         const visibleCount = ref(PAGE_SIZE)
         const localPosts = ref([])
+        const cloudPosts = ref([])
         const commentCounts = ref({})
-        const currentServerPage = ref(0)
-        const totalPages = ref(0)
+        const loadedPageMap = ref({})
+        const allPageNumbers = ref([])
         const newPostContent = ref('')
+        const syncStatus = ref('未启用云端文件同步，仅使用本地与站点静态文件')
+        const syncConfig = ref({ gistId: '', token: '', filename: 'posts.json' })
+
+        const readJSON = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) } catch (_) { return fallback } }
+        const saveJSON = (key, value) => localStorage.setItem(key, JSON.stringify(value))
 
         const visiblePosts = computed(() => {
-            const merged = [...localPosts.value, ...allPosts.value]
+            const merged = [...cloudPosts.value, ...localPosts.value, ...allPosts.value]
             if (!keyword.value.trim()) return merged.slice(0, visibleCount.value)
             const kw = keyword.value.toLowerCase()
             return merged.filter(p => (p.content || '').toLowerCase().includes(kw) || (p.comments || []).some(c => (c || '').toLowerCase().includes(kw)))
         })
 
-        const restoreLocalPosts = () => {
-            try { localPosts.value = JSON.parse(localStorage.getItem(LOCAL_POSTS_KEY) || '[]') } catch { localPosts.value = [] }
-        }
-
-        const saveLocalPosts = () => localStorage.setItem(LOCAL_POSTS_KEY, JSON.stringify(localPosts.value))
+        const restoreLocalPosts = () => { localPosts.value = readJSON(LOCAL_POSTS_KEY, []) }
+        const restoreCloudPosts = () => { cloudPosts.value = readJSON(CLOUD_POSTS_KEY, []) }
+        const saveLocalPosts = () => saveJSON(LOCAL_POSTS_KEY, localPosts.value)
+        const saveCloudPosts = () => saveJSON(CLOUD_POSTS_KEY, cloudPosts.value)
 
         const rebuildLocalCommentCounts = () => {
-            try {
-                const map = JSON.parse(localStorage.getItem(LOCAL_COMMENTS_KEY) || '{}')
-                Object.keys(map).forEach(id => {
-                    commentCounts.value[id] = (commentCounts.value[id] || 0) + map[id].length
-                })
-            } catch (_) {}
+            const map = readJSON(LOCAL_COMMENTS_KEY, {})
+            Object.keys(map).forEach(id => { commentCounts.value[id] = (commentCounts.value[id] || 0) + map[id].length })
         }
 
-        const submitPost = () => {
+        const saveSyncConfig = () => {
+            syncConfig.value.filename = (syncConfig.value.filename || 'posts.json').trim() || 'posts.json'
+            saveJSON(SYNC_CONFIG_KEY, syncConfig.value)
+            syncStatus.value = syncConfig.value.gistId && syncConfig.value.token ? '配置已保存，可进行云端文件同步' : '配置已保存（未填写完整）'
+        }
+
+        const clearSyncConfig = () => {
+            syncConfig.value = { gistId: '', token: '', filename: 'posts.json' }
+            localStorage.removeItem(SYNC_CONFIG_KEY)
+            syncStatus.value = '已清除云端配置，回退为纯本地模式'
+        }
+
+        const loadSyncConfig = () => {
+            const cfg = readJSON(SYNC_CONFIG_KEY, { gistId: '', token: '', filename: 'posts.json' })
+            syncConfig.value = { ...cfg, filename: cfg.filename || 'posts.json' }
+        }
+
+        const fetchCloudFile = async () => {
+            const { gistId, token, filename } = syncConfig.value
+            if (!gistId || !token) return null
+            const res = await fetch(`https://api.github.com/gists/${gistId}`, { headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' } })
+            if (!res.ok) throw new Error(`拉取失败: ${res.status}`)
+            const gist = await res.json()
+            const raw = gist.files?.[filename]?.content
+            if (!raw) return []
+            const parsed = JSON.parse(raw)
+            return Array.isArray(parsed) ? parsed : []
+        }
+
+        const pushCloudFile = async (posts) => {
+            const { gistId, token, filename } = syncConfig.value
+            if (!gistId || !token) return false
+            const payload = {
+                files: {
+                    [filename || 'posts.json']: {
+                        content: JSON.stringify(posts, null, 2)
+                    }
+                }
+            }
+            const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+                method: 'PATCH',
+                headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
+                body: JSON.stringify(payload)
+            })
+            if (!res.ok) throw new Error(`写入失败: ${res.status}`)
+            return true
+        }
+
+        const loadCloudPosts = async () => {
+            if (!syncConfig.value.gistId || !syncConfig.value.token) {
+                syncStatus.value = '未配置 gistId/token，跳过云端同步'
+                return
+            }
+            try {
+                syncStatus.value = '正在从云端文件拉取...'
+                const remote = await fetchCloudFile()
+                cloudPosts.value = remote || []
+                saveCloudPosts()
+                syncStatus.value = `云端文件同步成功，共 ${cloudPosts.value.length} 篇文章`
+            } catch (e) {
+                syncStatus.value = `云端拉取失败，已回退缓存：${e.message}`
+                restoreCloudPosts()
+            }
+        }
+
+        const submitPost = async () => {
             const content = newPostContent.value.trim()
             if (!content) return alert('请输入内容后再发布')
-            const post = { id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, content, createdAt: new Date().toISOString(), sourcePage: 'local' }
+            const post = { id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, content, createdAt: new Date().toISOString(), sourcePage: 'custom' }
             localPosts.value.unshift(post)
             saveLocalPosts()
+
+            if (syncConfig.value.gistId && syncConfig.value.token) {
+                try {
+                    const mergedCloud = [post, ...cloudPosts.value]
+                    await pushCloudFile(mergedCloud)
+                    cloudPosts.value = mergedCloud
+                    saveCloudPosts()
+                    syncStatus.value = '发布成功，并已写入云端文件'
+                } catch (e) {
+                    syncStatus.value = `本地发布成功，但云端写入失败：${e.message}`
+                }
+            }
             newPostContent.value = ''
         }
 
-        const loadHistory = () => {
-            try { searchHistory.value = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') } catch { searchHistory.value = [] }
-        }
-        const saveHistory = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(searchHistory.value))
+        const loadHistory = () => { searchHistory.value = readJSON(STORAGE_KEY, []) }
+        const saveHistory = () => saveJSON(STORAGE_KEY, searchHistory.value)
         const addToHistory = (kw) => { if (!kw.trim()) return; searchHistory.value = [kw, ...searchHistory.value.filter(x => x !== kw)].slice(0, 10); saveHistory() }
         const removeHistory = (index) => { searchHistory.value.splice(index, 1); saveHistory() }
         const clearHistory = () => { searchHistory.value = []; localStorage.removeItem(STORAGE_KEY) }
         const selectHistory = (kw) => { keyword.value = kw; search() }
 
         const loadServerPage = async (page) => {
+            if (loadedPageMap.value[page]) return loadedPageMap.value[page]
             const cacheKey = `gshmd_posts_page_${page}`
             const cached = sessionStorage.getItem(cacheKey)
-            if (cached) return JSON.parse(cached)
+            if (cached) {
+                const parsed = JSON.parse(cached)
+                loadedPageMap.value[page] = parsed
+                return parsed
+            }
             const res = await fetch(`posts-${page}.json`)
             const data = await res.json()
+            loadedPageMap.value[page] = data
             sessionStorage.setItem(cacheKey, JSON.stringify(data))
             return data
         }
 
         const loadInitial = async () => {
             loading.value = true
-            const [indexRes, firstPage] = await Promise.all([fetch('index.json'), loadServerPage(0)])
+            const indexRes = await fetch('index.json')
             const meta = await indexRes.json()
             commentCounts.value = meta.comments || {}
-            totalPages.value = meta.totalPages || 1
-            allPosts.value = firstPage
+            allPageNumbers.value = (meta.pages || []).map(x => x.page)
+            allPosts.value = await loadServerPage(0)
             rebuildLocalCommentCounts()
             loading.value = false
         }
 
-        const ensureSearchIndex = async () => {
-            if (searchIndex.value) return
-            loading.value = true
-            const cacheKey = 'gshmd_search_index_cache'
-            const cached = sessionStorage.getItem(cacheKey)
-            if (cached) {
-                searchIndex.value = JSON.parse(cached)
-            } else {
-                const res = await fetch('search-index.json')
-                searchIndex.value = await res.json()
-                sessionStorage.setItem(cacheKey, JSON.stringify(searchIndex.value))
+        const incrementalSearch = async (kw) => {
+            const lowerKw = kw.toLowerCase()
+            const matched = []
+            for (const page of allPageNumbers.value) {
+                const items = await loadServerPage(page)
+                matched.push(...items.filter(p => (p.content || '').toLowerCase().includes(lowerKw)))
             }
-            allPosts.value = searchIndex.value
-            loading.value = false
+            return matched
         }
 
         const search = async () => {
             const kw = keyword.value.trim()
-            if (kw) {
-                addToHistory(kw)
-                await ensureSearchIndex()
+            if (!kw) {
+                visibleCount.value = PAGE_SIZE
+                return
             }
-            visibleCount.value = PAGE_SIZE
+            addToHistory(kw)
+            loading.value = true
+            allPosts.value = await incrementalSearch(kw)
+            visibleCount.value = Math.max(PAGE_SIZE, allPosts.value.length)
+            loading.value = false
         }
 
         const reset = async () => {
             keyword.value = ''
             visibleCount.value = PAGE_SIZE
-            currentServerPage.value = 0
             allPosts.value = await loadServerPage(0)
         }
 
         const onScroll = async () => {
             if (loading.value || keyword.value.trim()) return
             if (window.innerHeight + window.scrollY < document.body.offsetHeight - 120) return
-            if (visibleCount.value < (localPosts.value.length + allPosts.value.length)) {
+            if (visibleCount.value < (cloudPosts.value.length + localPosts.value.length + allPosts.value.length)) {
                 visibleCount.value += PAGE_SIZE
                 return
             }
-            if (currentServerPage.value + 1 >= totalPages.value) return
+            const loadedPages = Object.keys(loadedPageMap.value).map(x => Number(x))
+            const next = allPageNumbers.value.find(p => !loadedPages.includes(p))
+            if (next === undefined) return
             loading.value = true
-            currentServerPage.value += 1
-            const next = await loadServerPage(currentServerPage.value)
-            allPosts.value = [...allPosts.value, ...next]
+            const nextData = await loadServerPage(next)
+            allPosts.value = [...allPosts.value, ...nextData]
             loading.value = false
         }
 
@@ -215,11 +315,16 @@ createApp({
         const navigateToPost = (post) => { window.location.href = getPostLink(post) }
 
         onMounted(async () => {
-            restoreLocalPosts(); loadHistory(); await loadInitial();
+            restoreLocalPosts()
+            restoreCloudPosts()
+            loadHistory()
+            loadSyncConfig()
+            await loadInitial()
+            await loadCloudPosts()
             window.addEventListener('scroll', onScroll)
         })
 
-        return { keyword, loading, searchHistory, visiblePosts, newPostContent, submitPost, search, reset, selectHistory, removeHistory, clearHistory, abbreviate, formatDate, getCommentCount, getPostLink, navigateToPost }
+        return { keyword, loading, searchHistory, visiblePosts, newPostContent, submitPost, search, reset, selectHistory, removeHistory, clearHistory, abbreviate, formatDate, getCommentCount, getPostLink, navigateToPost, syncConfig, syncStatus, saveSyncConfig, clearSyncConfig, loadCloudPosts }
     }
 }).mount('#app')
 </script>
