@@ -52,7 +52,8 @@
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <script>
 const { createApp, ref, onMounted } = Vue
-const LOCAL_POSTS_KEY = 'gshmd_local_posts_v1'
+const LOCAL_POSTS_KEY = 'gshmd_local_posts_v2'
+const CLOUD_POSTS_KEY = 'gshmd_cloud_posts_v1'
 const LOCAL_COMMENTS_KEY = 'gshmd_local_comments_v1'
 
 createApp({
@@ -67,12 +68,19 @@ createApp({
 
         const formatDate = (dateStr) => !dateStr ? '' : new Date(dateStr).toLocaleString('zh-CN')
         const readJSON = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) } catch { return fallback } }
-        const loadLocalPost = (postId) => readJSON(LOCAL_POSTS_KEY, []).find(p => p.id === postId)
+        const loadCustomPost = (postId) => {
+            const local = readJSON(LOCAL_POSTS_KEY, []).find(p => p.id === postId)
+            if (local) return local
+            return readJSON(CLOUD_POSTS_KEY, []).find(p => p.id === postId)
+        }
 
         const loadPostFromServer = async (postId, sourcePage) => {
+            const index = await (await fetch('index.json')).json()
+            const pages = (index.pages || []).map(x => x.page)
             const pagesToTry = []
-            if (sourcePage && sourcePage !== 'local') pagesToTry.push(sourcePage)
-            pagesToTry.push(0)
+            if (sourcePage && sourcePage !== 'custom') pagesToTry.push(Number(sourcePage))
+            for (const p of pages) if (!pagesToTry.includes(p)) pagesToTry.push(p)
+
             for (const p of pagesToTry) {
                 try {
                     const cacheKey = `gshmd_posts_page_${p}`
@@ -83,13 +91,7 @@ createApp({
                     if (found) return found
                 } catch (_) {}
             }
-            try {
-                const cacheKey = 'gshmd_search_index_cache'
-                const cached = sessionStorage.getItem(cacheKey)
-                const index = cached ? JSON.parse(cached) : await (await fetch('search-index.json')).json()
-                sessionStorage.setItem(cacheKey, JSON.stringify(index))
-                return index.find(p => p.id === postId) || null
-            } catch (_) { return null }
+            return null
         }
 
         const loadServerComments = async (postId) => {
@@ -107,7 +109,7 @@ createApp({
         }
 
         const loadAllComments = async (postId) => {
-            const serverComments = postId.startsWith('local-') ? [] : await loadServerComments(postId)
+            const serverComments = postId.startsWith('custom-') ? [] : await loadServerComments(postId)
             const localCommentsMap = readJSON(LOCAL_COMMENTS_KEY, {})
             const userComments = localCommentsMap[postId] || []
             comments.value = [...serverComments, ...userComments]
@@ -138,8 +140,8 @@ createApp({
                 return
             }
 
-            const local = loadLocalPost(postId)
-            post.value = local || await loadPostFromServer(postId, sourcePage)
+            const customPost = loadCustomPost(postId)
+            post.value = customPost || await loadPostFromServer(postId, sourcePage)
 
             if (!post.value) {
                 notFound.value = true
