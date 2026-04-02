@@ -6,195 +6,153 @@
     <title>帖子详情</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #f5f5f5;
-            padding: 20px;
-            line-height: 1.6;
-        }
+        body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background: #f5f5f5; padding: 20px; line-height: 1.6; }
         .container { max-width: 800px; margin: 0 auto; }
-
-        .back-link {
-            display: inline-block;
-            margin-bottom: 20px;
-            color: #007bff;
-            text-decoration: none;
-        }
-        .back-link:hover { text-decoration: underline; }
-
-        .main-post {
-            background: white;
-            border-radius: 8px;
-            padding: 24px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .main-post h2 {
-            color: #333;
-            margin-bottom: 16px;
-        }
-        .post-content {
-            font-size: 16px;
-            color: #444;
-            white-space: pre-wrap;
-            word-break: break-word;
-            line-height: 1.8;
-        }
-        .post-date {
-            font-size: 13px;
-            color: #999;
-            margin-top: 20px;
-            padding-top: 16px;
-            border-top: 1px solid #eee;
-        }
-
-        .comments {
-            background: white;
-            border-radius: 8px;
-            padding: 24px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .comments h3 {
-            color: #333;
-            margin-bottom: 20px;
-        }
-        .comment {
-            padding: 16px 0;
-            border-bottom: 1px solid #eee;
-        }
+        .back-link { display: inline-block; margin-bottom: 20px; color: #007bff; text-decoration: none; }
+        .main-post,.comments,.panel { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,.1); margin-bottom: 16px; }
+        .post-content,.comment-content { font-size: 15px; color: #444; white-space: pre-wrap; word-break: break-word; }
+        .post-date,.comment-date { font-size: 12px; color: #999; margin-top: 8px; }
+        .comment { padding: 14px 0; border-bottom: 1px solid #eee; }
         .comment:last-child { border-bottom: none; }
-        .comment-content {
-            font-size: 15px;
-            color: #444;
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .comment-date {
-            font-size: 12px;
-            color: #999;
-            margin-top: 8px;
-        }
-
-        .loading, .not-found {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
+        textarea { width: 100%; min-height: 90px; resize: vertical; border: 1px solid #ddd; border-radius: 8px; padding: 10px; }
+        button { margin-top: 8px; padding: 10px 14px; border: none; border-radius: 8px; background: #007bff; color: #fff; cursor: pointer; }
+        .loading,.not-found { text-align: center; padding: 40px; color: #666; }
     </style>
 </head>
 <body>
-    <div class="container" id="app">
-        <a href="index.html" class="back-link">← 返回列表</a>
+<div class="container" id="app">
+    <a :href="backLink" class="back-link">← 返回列表</a>
+    <div v-if="loading" class="loading">加载中...</div>
+    <div v-else-if="notFound" class="not-found">{{ notFoundMessage }}</div>
 
-        <div v-if="loading" class="loading">加载中...</div>
+    <template v-else-if="post">
+        <div class="main-post">
+            <h2>主贴</h2>
+            <div class="post-content">{{ post.content }}</div>
+            <div class="post-date">{{ formatDate(post.createdAt) }}</div>
+        </div>
 
-        <div v-else-if="notFound" class="not-found">{{ notFoundMessage }}</div>
+        <div class="panel">
+            <h3>🕶 匿名评论</h3>
+            <textarea maxlength="1000" v-model="newComment" placeholder="写下你的匿名评论（仅保存在当前设备）"></textarea>
+            <button @click="submitComment">发布评论</button>
+        </div>
 
-        <template v-else-if="post">
-            <div class="main-post">
-                <h2>主贴</h2>
-                <div class="post-content">{{ post.content }}</div>
-                <div class="post-date">{{ formatDate(post.createdAt) }}</div>
+        <div class="comments">
+            <h3>评论 ({{ comments.length }})</h3>
+            <p v-if="comments.length === 0" style="color:#999">暂无评论</p>
+            <div v-for="comment in comments" :key="comment.id" class="comment">
+                <div class="comment-content">{{ comment.content }}</div>
+                <div class="comment-date">{{ formatDate(comment.createdAt) }}</div>
             </div>
+        </div>
+    </template>
+</div>
 
-            <div class="comments">
-                <h3>评论 ({{ comments.length }})</h3>
-                <p v-if="comments.length === 0" style="color:#999">暂无评论</p>
-                <div v-for="comment in comments" :key="comment.id" class="comment">
-                    <div class="comment-content">{{ comment.content }}</div>
-                    <div class="comment-date">{{ formatDate(comment.createdAt) }}</div>
-                </div>
-            </div>
-        </template>
-    </div>
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script>
+const { createApp, ref, onMounted } = Vue
+const LOCAL_POSTS_KEY = 'gshmd_local_posts_v1'
+const LOCAL_COMMENTS_KEY = 'gshmd_local_comments_v1'
 
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script>
-        const { createApp, ref, onMounted } = Vue
+createApp({
+    setup() {
+        const post = ref(null)
+        const comments = ref([])
+        const newComment = ref('')
+        const loading = ref(true)
+        const notFound = ref(false)
+        const notFoundMessage = ref('')
+        const backLink = ref('index.html')
 
-        createApp({
-            setup() {
-                const post = ref(null)
-                const comments = ref([])
-                const loading = ref(true)
-                const notFound = ref(false)
-                const notFoundMessage = ref('')
+        const formatDate = (dateStr) => !dateStr ? '' : new Date(dateStr).toLocaleString('zh-CN')
+        const readJSON = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) } catch { return fallback } }
+        const loadLocalPost = (postId) => readJSON(LOCAL_POSTS_KEY, []).find(p => p.id === postId)
 
-                const formatDate = (dateStr) => {
-                    if (!dateStr) return ''
-                    try {
-                        return new Date(dateStr).toLocaleString('zh-CN')
-                    } catch (e) {
-                        return dateStr
-                    }
-                }
-
-                // 从搜索索引加载帖子基本信息
-                const loadFromSearchIndex = async (postId) => {
-                    try {
-                        const res = await fetch('search-index.json')
-                        const index = await res.json()
-                        const found = index.find(p => p.id === postId)
-                        return found
-                    } catch (e) {
-                        console.error('加载搜索索引失败:', e)
-                        return null
-                    }
-                }
-
-                // 加载评论
-                const loadComments = async (postId) => {
-                    try {
-                        const safeId = postId.replace('/', '_')
-                        const res = await fetch(`comments/${safeId}.json`)
-                        if (!res.ok) return []
-                        return await res.json()
-                    } catch (e) {
-                        return []
-                    }
-                }
-
-                onMounted(async () => {
-                    const params = new URLSearchParams(window.location.search)
-                    const postId = params.get('id')
-
-                    if (!postId) {
-                        notFound.value = true
-                        notFoundMessage.value = '请提供帖子 ID'
-                        loading.value = false
-                        return
-                    }
-
-                    try {
-                        // 从搜索索引加载（包含完整 content）
-                        const found = await loadFromSearchIndex(postId)
-
-                        if (!found) {
-                            notFound.value = true
-                            notFoundMessage.value = '帖子不存在'
-                        } else {
-                            post.value = found
-                            comments.value = await loadComments(postId)
-                        }
-                    } catch (e) {
-                        notFound.value = true
-                        notFoundMessage.value = '加载失败，请稍后重试'
-                        console.error(e)
-                    } finally {
-                        loading.value = false
-                    }
-                })
-
-                return {
-                    post,
-                    comments,
-                    loading,
-                    notFound,
-                    notFoundMessage,
-                    formatDate
-                }
+        const loadPostFromServer = async (postId, sourcePage) => {
+            const pagesToTry = []
+            if (sourcePage && sourcePage !== 'local') pagesToTry.push(sourcePage)
+            pagesToTry.push(0)
+            for (const p of pagesToTry) {
+                try {
+                    const cacheKey = `gshmd_posts_page_${p}`
+                    const cached = sessionStorage.getItem(cacheKey)
+                    const pageData = cached ? JSON.parse(cached) : await (await fetch(`posts-${p}.json`)).json()
+                    sessionStorage.setItem(cacheKey, JSON.stringify(pageData))
+                    const found = pageData.find(x => x.id === postId)
+                    if (found) return found
+                } catch (_) {}
             }
-        }).mount('#app')
-    </script>
+            try {
+                const cacheKey = 'gshmd_search_index_cache'
+                const cached = sessionStorage.getItem(cacheKey)
+                const index = cached ? JSON.parse(cached) : await (await fetch('search-index.json')).json()
+                sessionStorage.setItem(cacheKey, JSON.stringify(index))
+                return index.find(p => p.id === postId) || null
+            } catch (_) { return null }
+        }
+
+        const loadServerComments = async (postId) => {
+            try {
+                const safeId = postId.replace('/', '_')
+                const cacheKey = `gshmd_comments_${safeId}`
+                const cached = sessionStorage.getItem(cacheKey)
+                if (cached) return JSON.parse(cached)
+                const res = await fetch(`comments/${safeId}.json`)
+                if (!res.ok) return []
+                const data = await res.json()
+                sessionStorage.setItem(cacheKey, JSON.stringify(data))
+                return data
+            } catch (_) { return [] }
+        }
+
+        const loadAllComments = async (postId) => {
+            const serverComments = postId.startsWith('local-') ? [] : await loadServerComments(postId)
+            const localCommentsMap = readJSON(LOCAL_COMMENTS_KEY, {})
+            const userComments = localCommentsMap[postId] || []
+            comments.value = [...serverComments, ...userComments]
+        }
+
+        const submitComment = () => {
+            const content = newComment.value.trim()
+            if (!content) return alert('请输入评论后再提交')
+            const localCommentsMap = readJSON(LOCAL_COMMENTS_KEY, {})
+            localCommentsMap[post.value.id] = localCommentsMap[post.value.id] || []
+            localCommentsMap[post.value.id].push({ id: `local-comment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, content, createdAt: new Date().toISOString() })
+            localStorage.setItem(LOCAL_COMMENTS_KEY, JSON.stringify(localCommentsMap))
+            newComment.value = ''
+            loadAllComments(post.value.id)
+        }
+
+        onMounted(async () => {
+            const params = new URLSearchParams(window.location.search)
+            const postId = params.get('id')
+            const sourcePage = params.get('src')
+            const q = params.get('q')
+            if (q) backLink.value = `index.html?q=${encodeURIComponent(q)}`
+
+            if (!postId) {
+                notFound.value = true
+                notFoundMessage.value = '请提供帖子 ID'
+                loading.value = false
+                return
+            }
+
+            const local = loadLocalPost(postId)
+            post.value = local || await loadPostFromServer(postId, sourcePage)
+
+            if (!post.value) {
+                notFound.value = true
+                notFoundMessage.value = '帖子不存在'
+            } else {
+                await loadAllComments(postId)
+            }
+            loading.value = false
+        })
+
+        return { post, comments, newComment, loading, notFound, notFoundMessage, backLink, formatDate, submitComment }
+    }
+}).mount('#app')
+</script>
 </body>
 </html>
