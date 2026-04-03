@@ -3,102 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>帖子列表</title>
+    <title>文章广场</title>
     <style>
+        :root {
+            --bg: #f3f5f9;
+            --card: #ffffff;
+            --text: #1f2937;
+            --muted: #6b7280;
+            --brand: #2563eb;
+            --brand-soft: #e0eaff;
+            --ok: #15803d;
+            --warn: #b45309;
+            --shadow: 0 8px 20px rgba(0,0,0,.06);
+            --radius: 14px;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background: #f5f5f5; padding: 15px; line-height: 1.6; min-height: 100vh; }
-        .container { max-width: 860px; margin: 0 auto; }
-        h1 { text-align: center; margin-bottom: 15px; color: #333; font-size: 24px; }
-        .panel { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,.08); }
-        .panel h2 { font-size: 16px; margin-bottom: 10px; color: #333; }
-        textarea, input[type="text"], input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff; }
-        textarea { resize: vertical; min-height: 86px; }
-        .actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-        button { padding: 10px 14px; background: #007bff; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; }
-        .secondary { background: #6c757d; }
-        .search-box { display: flex; gap: 8px; margin-bottom: 10px; }
-        .search-history { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 12px; background: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.08); }
-        .search-history-title { font-size: 13px; color: #999; margin-right: 8px; display: flex; align-items: center; }
-        .history-tag { display: inline-flex; align-items: center; padding: 6px 12px; background: #e9ecef; color: #495057; border-radius: 16px; font-size: 13px; cursor: pointer; }
-        .history-tag .remove { margin-left: 6px; opacity: .6; }
-        .clear-history { margin-left: auto; font-size: 13px; color: #999; cursor: pointer; padding: 6px 12px; }
-        .post-list { list-style: none; }
-        .post-item { background: #fff; border-radius: 8px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,.08); }
-        .post-item a { text-decoration: none; color: #333; display: block; }
-        .post-content { font-size: 15px; color: #444; white-space: pre-wrap; word-break: break-word; }
-        .post-date { font-size: 12px; color: #999; margin-top: 10px; }
-        .loading-more,.no-results,.sync-hint { text-align: center; padding: 20px; color: #999; }
-        .sync-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        .sync-grid .full { grid-column: 1 / -1; }
-        .small { font-size: 12px; color: #888; margin-top: 6px; }
-        @media (max-width: 640px) { .sync-grid { grid-template-columns: 1fr; } }
+        body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .container { max-width: 980px; margin: 0 auto; padding: 18px 14px 40px; }
+        .header { display: flex; justify-content: space-between; gap: 12px; align-items: center; margin-bottom: 14px; }
+        .title { font-size: 26px; font-weight: 800; }
+        .subtitle { color: var(--muted); font-size: 13px; margin-top: 4px; }
+        .pill { background: var(--brand-soft); color: var(--brand); border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 600; }
+        .grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+        .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px; }
+        .card h2 { font-size: 16px; margin-bottom: 10px; }
+        .muted { font-size: 12px; color: var(--muted); }
+        textarea, input[type="text"], input[type="password"] {
+            width: 100%; border: 1px solid #d7dbe5; border-radius: 10px; padding: 10px 12px; font-size: 14px; background: #fff;
+        }
+        textarea { min-height: 120px; resize: vertical; line-height: 1.7; }
+        textarea:focus, input:focus { border-color: var(--brand); outline: none; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
+        .row { display: flex; gap: 8px; flex-wrap: wrap; }
+        .row > * { flex: 1; min-width: 140px; }
+        .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        button { border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer; font-size: 14px; font-weight: 600; }
+        .btn-primary { background: var(--brand); color: #fff; }
+        .btn-ghost { background: #eef2f7; color: #374151; }
+        .btn-danger { background: #fff1f2; color: #be123c; }
+        .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+        .toolbar { display: flex; gap: 8px; margin-bottom: 10px; }
+        .toolbar input { flex: 1; }
+        .tabs { display: inline-flex; background: #edf1f7; padding: 3px; border-radius: 999px; margin-bottom: 10px; }
+        .tab { border-radius: 999px; padding: 8px 14px; font-size: 13px; border: 0; background: transparent; color: #4b5563; }
+        .tab.active { background: #fff; color: #111827; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+        .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .chip { background: #edf2f7; border-radius: 999px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+        .post-list { list-style: none; display: grid; gap: 10px; }
+        .post-item { background: #fff; border-radius: 12px; box-shadow: var(--shadow); padding: 14px; border: 1px solid #ebedf3; }
+        .post-item:hover { border-color: #d6def5; }
+        .post-link { text-decoration: none; color: inherit; display: block; }
+        .post-title { font-size: 15px; font-weight: 600; white-space: pre-wrap; word-break: break-word; }
+        .post-meta { margin-top: 8px; font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+        .state { text-align: center; color: var(--muted); padding: 16px; }
+        .toast {
+            position: fixed; right: 12px; bottom: 12px; background: #111827; color: #fff; padding: 10px 14px; border-radius: 10px;
+            opacity: 0; transform: translateY(10px); pointer-events: none; transition: all .2s;
+        }
+        .toast.show { opacity: 1; transform: translateY(0); }
+        .counter { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--muted); }
+        @media (min-width: 920px) { .grid { grid-template-columns: 1fr 1.6fr; } }
     </style>
 </head>
 <body>
-<div class="container" id="app">
-    <h1>📋 帖子列表</h1>
-
-    <div class="panel">
-        <h2>☁️ 文件同步（可选）</h2>
-        <div class="sync-grid">
-            <input v-model="syncConfig.gistId" type="text" placeholder="GitHub Gist ID（用于云端文件存储）" class="full">
-            <input v-model="syncConfig.filename" type="text" placeholder="文件名（默认 posts.json）">
-            <input v-model="syncConfig.token" type="password" placeholder="GitHub Token（gist scope）">
+<div id="app" class="container">
+    <div class="header">
+        <div>
+            <div class="title">📰 文章广场</div>
+            <div class="subtitle">完全无数据库：本地浏览器存储 + 可选 Gist 云端文件同步</div>
         </div>
-        <div class="actions">
-            <button @click="saveSyncConfig">保存配置</button>
-            <button class="secondary" @click="loadCloudPosts">立即同步拉取</button>
-            <button class="secondary" @click="clearSyncConfig">清除配置</button>
-        </div>
-        <div class="small">{{ syncStatus }}</div>
+        <div class="pill">{{ visiblePosts.length }} 篇</div>
     </div>
 
-    <div class="panel">
-        <h2>✍️ 添加文章</h2>
-        <textarea v-model="newPostContent" maxlength="1000" placeholder="输入文章内容（会保存到浏览器，且可同步写入 Gist 文件）"></textarea>
-        <div class="actions">
-            <button @click="submitPost">发布内容</button>
-            <button class="secondary" @click="newPostContent = ''">清空</button>
-        </div>
+    <div class="grid">
+        <section class="card">
+            <h2>✍️ 添加文章</h2>
+            <textarea v-model="newPostContent" maxlength="1000" placeholder="输入文章内容（Ctrl/Cmd + Enter 快速发布）"></textarea>
+            <div class="counter">
+                <span>自动草稿：{{ draftSavedAt || '未保存' }}</span>
+                <span :style="{ color: remainCount < 50 ? '#b45309' : '#6b7280' }">剩余 {{ remainCount }} 字</span>
+            </div>
+            <div class="actions">
+                <button class="btn-primary" :disabled="!newPostContent.trim()" @click="submitPost">发布文章</button>
+                <button class="btn-ghost" @click="newPostContent = ''">清空</button>
+                <button class="btn-ghost" @click="recoverDraft">恢复草稿</button>
+            </div>
+
+            <hr style="border:0;border-top:1px solid #eef1f6;margin:14px 0">
+            <h2>☁️ 云端文件同步（可选）</h2>
+            <div class="row">
+                <input v-model="syncConfig.gistId" type="text" placeholder="Gist ID">
+                <input v-model="syncConfig.filename" type="text" placeholder="文件名（默认 posts.json）">
+                <input v-model="syncConfig.token" type="password" placeholder="Token（gist scope）">
+            </div>
+            <div class="actions">
+                <button class="btn-primary" @click="saveSyncConfig">保存</button>
+                <button class="btn-ghost" @click="loadCloudPosts">拉取云端</button>
+                <button class="btn-danger" @click="clearSyncConfig">清除配置</button>
+            </div>
+            <p class="muted" style="margin-top:8px">{{ syncStatus }}</p>
+        </section>
+
+        <section>
+            <div class="card">
+                <div class="tabs">
+                    <button class="tab" :class="{active:viewMode==='all'}" @click="viewMode='all'">全部</button>
+                    <button class="tab" :class="{active:viewMode==='local'}" @click="viewMode='local'">仅我发布</button>
+                </div>
+                <div class="toolbar">
+                    <input type="text" v-model="keyword" @keyup.enter="search" placeholder="搜索标题/正文内容">
+                    <button class="btn-primary" @click="search">搜索</button>
+                    <button class="btn-ghost" @click="reset">重置</button>
+                </div>
+
+                <div v-if="searchHistory.length" class="chips">
+                    <span class="chip" v-for="(item,index) in searchHistory" :key="item+index" @click="selectHistory(item)">{{ item }}</span>
+                    <span class="chip" @click="clearHistory">清空历史</span>
+                </div>
+            </div>
+
+            <ul class="post-list" style="margin-top:10px">
+                <li v-for="post in visiblePosts" :key="post.id" class="post-item">
+                    <a class="post-link" :href="getPostLink(post)" @click.prevent="navigateToPost(post)">
+                        <div class="post-title">{{ abbreviate(post.content, 140) }}</div>
+                        <div class="post-meta">
+                            <span>{{ formatDate(post.createdAt) }}</span>
+                            <span>{{ getCommentCount(post.id) }} 条评论</span>
+                        </div>
+                    </a>
+                </li>
+            </ul>
+
+            <div v-if="loading" class="state">加载中...</div>
+            <div v-if="!loading && !visiblePosts.length" class="state">暂无内容，来发布第一篇吧 ✨</div>
+        </section>
     </div>
 
-    <div class="search-box">
-        <input type="text" v-model="keyword" placeholder="搜索内容（按需扫描分页文件，避免一次性加载全部）" @keyup.enter="search" />
-        <button @click="search">搜索</button>
-        <button class="secondary" @click="reset">↻ 重置</button>
-    </div>
-
-    <div v-if="searchHistory.length > 0 && !keyword" class="search-history">
-        <span class="search-history-title">🔥 历史搜索：</span>
-        <span v-for="(item, index) in searchHistory" :key="index" class="history-tag" @click="selectHistory(item)">
-            {{ item }}
-            <span class="remove" @click.stop="removeHistory(index)">✕</span>
-        </span>
-        <span class="clear-history" @click="clearHistory">清空历史</span>
-    </div>
-
-    <ul class="post-list">
-        <li v-for="post in visiblePosts" :key="post.id" class="post-item">
-            <a :href="getPostLink(post)" @click.prevent="navigateToPost(post)">
-                <div class="post-content">{{ abbreviate(post.content, 120) }}</div>
-                <div class="post-date">{{ formatDate(post.createdAt) }} · {{ getCommentCount(post.id) }}条评论</div>
-            </a>
-        </li>
-    </ul>
-
-    <div v-if="loading" class="loading-more">加载中...</div>
-    <div v-if="!loading && visiblePosts.length === 0" class="no-results">暂无内容</div>
+    <div class="toast" :class="{show: toast.show}">{{ toast.text }}</div>
 </div>
 
 <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
 <script>
-const { createApp, ref, computed, onMounted } = Vue
+const { createApp, ref, computed, onMounted, watch } = Vue
 
 const STORAGE_KEY = 'gshmd_search_history'
-const LOCAL_POSTS_KEY = 'gshmd_local_posts_v2'
+const LOCAL_POSTS_KEY = 'gshmd_local_posts_v3'
 const LOCAL_COMMENTS_KEY = 'gshmd_local_comments_v1'
-const CLOUD_POSTS_KEY = 'gshmd_cloud_posts_v1'
-const SYNC_CONFIG_KEY = 'gshmd_gist_sync_v1'
+const CLOUD_POSTS_KEY = 'gshmd_cloud_posts_v2'
+const SYNC_CONFIG_KEY = 'gshmd_gist_sync_v2'
+const DRAFT_KEY = 'gshmd_post_draft_v1'
 const PAGE_SIZE = window.innerWidth >= 768 ? 50 : 20
 
 createApp({
@@ -114,17 +166,31 @@ createApp({
         const loadedPageMap = ref({})
         const allPageNumbers = ref([])
         const newPostContent = ref('')
-        const syncStatus = ref('未启用云端文件同步，仅使用本地与站点静态文件')
+        const viewMode = ref('all')
+        const toast = ref({ show: false, text: '' })
+        const draftSavedAt = ref('')
+        const syncStatus = ref('纯本地模式（无需数据库）')
         const syncConfig = ref({ gistId: '', token: '', filename: 'posts.json' })
 
         const readJSON = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)) } catch (_) { return fallback } }
         const saveJSON = (key, value) => localStorage.setItem(key, JSON.stringify(value))
+        const showToast = (text) => {
+            toast.value = { show: true, text }
+            setTimeout(() => toast.value.show = false, 1600)
+        }
+
+        const remainCount = computed(() => 1000 - newPostContent.value.length)
+
+        const sourceMergedPosts = computed(() => {
+            const base = [...cloudPosts.value, ...localPosts.value, ...allPosts.value]
+            return viewMode.value === 'local' ? base.filter(p => String(p.id).startsWith('custom-')) : base
+        })
 
         const visiblePosts = computed(() => {
-            const merged = [...cloudPosts.value, ...localPosts.value, ...allPosts.value]
+            const merged = sourceMergedPosts.value
             if (!keyword.value.trim()) return merged.slice(0, visibleCount.value)
             const kw = keyword.value.toLowerCase()
-            return merged.filter(p => (p.content || '').toLowerCase().includes(kw) || (p.comments || []).some(c => (c || '').toLowerCase().includes(kw)))
+            return merged.filter(p => (p.content || '').toLowerCase().includes(kw))
         })
 
         const restoreLocalPosts = () => { localPosts.value = readJSON(LOCAL_POSTS_KEY, []) }
@@ -140,13 +206,15 @@ createApp({
         const saveSyncConfig = () => {
             syncConfig.value.filename = (syncConfig.value.filename || 'posts.json').trim() || 'posts.json'
             saveJSON(SYNC_CONFIG_KEY, syncConfig.value)
-            syncStatus.value = syncConfig.value.gistId && syncConfig.value.token ? '配置已保存，可进行云端文件同步' : '配置已保存（未填写完整）'
+            syncStatus.value = syncConfig.value.gistId && syncConfig.value.token ? '配置已保存，可同步' : '配置不完整，仍使用纯本地模式'
+            showToast('同步配置已保存')
         }
 
         const clearSyncConfig = () => {
             syncConfig.value = { gistId: '', token: '', filename: 'posts.json' }
             localStorage.removeItem(SYNC_CONFIG_KEY)
-            syncStatus.value = '已清除云端配置，回退为纯本地模式'
+            syncStatus.value = '已清除配置，回到纯本地模式'
+            showToast('已清除同步配置')
         }
 
         const loadSyncConfig = () => {
@@ -169,13 +237,7 @@ createApp({
         const pushCloudFile = async (posts) => {
             const { gistId, token, filename } = syncConfig.value
             if (!gistId || !token) return false
-            const payload = {
-                files: {
-                    [filename || 'posts.json']: {
-                        content: JSON.stringify(posts, null, 2)
-                    }
-                }
-            }
+            const payload = { files: { [filename || 'posts.json']: { content: JSON.stringify(posts, null, 2) } } }
             const res = await fetch(`https://api.github.com/gists/${gistId}`, {
                 method: 'PATCH',
                 headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
@@ -187,27 +249,29 @@ createApp({
 
         const loadCloudPosts = async () => {
             if (!syncConfig.value.gistId || !syncConfig.value.token) {
-                syncStatus.value = '未配置 gistId/token，跳过云端同步'
+                syncStatus.value = '未填写 gistId/token，跳过云端同步'
                 return
             }
             try {
-                syncStatus.value = '正在从云端文件拉取...'
-                const remote = await fetchCloudFile()
-                cloudPosts.value = remote || []
+                syncStatus.value = '拉取云端文件中...'
+                cloudPosts.value = await fetchCloudFile() || []
                 saveCloudPosts()
-                syncStatus.value = `云端文件同步成功，共 ${cloudPosts.value.length} 篇文章`
+                syncStatus.value = `云端同步成功，共 ${cloudPosts.value.length} 篇`
+                showToast('云端同步成功')
             } catch (e) {
-                syncStatus.value = `云端拉取失败，已回退缓存：${e.message}`
+                syncStatus.value = `云端同步失败，已回退本地缓存：${e.message}`
                 restoreCloudPosts()
             }
         }
 
         const submitPost = async () => {
             const content = newPostContent.value.trim()
-            if (!content) return alert('请输入内容后再发布')
+            if (!content) return
             const post = { id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, content, createdAt: new Date().toISOString(), sourcePage: 'custom' }
             localPosts.value.unshift(post)
             saveLocalPosts()
+            localStorage.removeItem(DRAFT_KEY)
+            draftSavedAt.value = ''
 
             if (syncConfig.value.gistId && syncConfig.value.token) {
                 try {
@@ -215,18 +279,18 @@ createApp({
                     await pushCloudFile(mergedCloud)
                     cloudPosts.value = mergedCloud
                     saveCloudPosts()
-                    syncStatus.value = '发布成功，并已写入云端文件'
+                    syncStatus.value = '发布成功，并已同步云端文件'
                 } catch (e) {
-                    syncStatus.value = `本地发布成功，但云端写入失败：${e.message}`
+                    syncStatus.value = `发布成功，但云端写入失败：${e.message}`
                 }
             }
             newPostContent.value = ''
+            showToast('发布成功')
         }
 
         const loadHistory = () => { searchHistory.value = readJSON(STORAGE_KEY, []) }
         const saveHistory = () => saveJSON(STORAGE_KEY, searchHistory.value)
         const addToHistory = (kw) => { if (!kw.trim()) return; searchHistory.value = [kw, ...searchHistory.value.filter(x => x !== kw)].slice(0, 10); saveHistory() }
-        const removeHistory = (index) => { searchHistory.value.splice(index, 1); saveHistory() }
         const clearHistory = () => { searchHistory.value = []; localStorage.removeItem(STORAGE_KEY) }
         const selectHistory = (kw) => { keyword.value = kw; search() }
 
@@ -269,10 +333,7 @@ createApp({
 
         const search = async () => {
             const kw = keyword.value.trim()
-            if (!kw) {
-                visibleCount.value = PAGE_SIZE
-                return
-            }
+            if (!kw) { visibleCount.value = PAGE_SIZE; return }
             addToHistory(kw)
             loading.value = true
             allPosts.value = await incrementalSearch(kw)
@@ -289,10 +350,7 @@ createApp({
         const onScroll = async () => {
             if (loading.value || keyword.value.trim()) return
             if (window.innerHeight + window.scrollY < document.body.offsetHeight - 120) return
-            if (visibleCount.value < (cloudPosts.value.length + localPosts.value.length + allPosts.value.length)) {
-                visibleCount.value += PAGE_SIZE
-                return
-            }
+            if (visibleCount.value < sourceMergedPosts.value.length) { visibleCount.value += PAGE_SIZE; return }
             const loadedPages = Object.keys(loadedPageMap.value).map(x => Number(x))
             const next = allPageNumbers.value.find(p => !loadedPages.includes(p))
             if (next === undefined) return
@@ -314,6 +372,18 @@ createApp({
         }
         const navigateToPost = (post) => { window.location.href = getPostLink(post) }
 
+        const recoverDraft = () => {
+            const draft = localStorage.getItem(DRAFT_KEY) || ''
+            if (!draft) return showToast('没有可恢复的草稿')
+            newPostContent.value = draft
+            showToast('已恢复草稿')
+        }
+
+        watch(newPostContent, (val) => {
+            localStorage.setItem(DRAFT_KEY, val)
+            draftSavedAt.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+        })
+
         onMounted(async () => {
             restoreLocalPosts()
             restoreCloudPosts()
@@ -322,9 +392,12 @@ createApp({
             await loadInitial()
             await loadCloudPosts()
             window.addEventListener('scroll', onScroll)
+            window.addEventListener('keydown', (e) => {
+                if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submitPost()
+            })
         })
 
-        return { keyword, loading, searchHistory, visiblePosts, newPostContent, submitPost, search, reset, selectHistory, removeHistory, clearHistory, abbreviate, formatDate, getCommentCount, getPostLink, navigateToPost, syncConfig, syncStatus, saveSyncConfig, clearSyncConfig, loadCloudPosts }
+        return { keyword, loading, searchHistory, visiblePosts, newPostContent, submitPost, search, reset, selectHistory, clearHistory, abbreviate, formatDate, getCommentCount, getPostLink, navigateToPost, syncConfig, syncStatus, saveSyncConfig, clearSyncConfig, loadCloudPosts, remainCount, viewMode, toast, draftSavedAt, recoverDraft }
     }
 }).mount('#app')
 </script>

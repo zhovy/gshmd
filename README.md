@@ -1,86 +1,36 @@
-# GSHMD 帖子查看器
+# GSHMD（无数据库版本）
 
-一个基于 Spring Boot + Thymeleaf 的帖子查看器，支持静态部署到 GitHub Pages。
+一个基于 Spring Boot 静态托管的文章查看器：
 
-## 📖 功能
+- **不依赖数据库**（无 MySQL / MyBatis）。
+- 文章与评论优先使用**浏览器本地存储**。
+- 可选使用 **GitHub Gist 文件同步**做跨设备数据共享。
+- 列表页与详情页均支持移动端优化交互。
 
-- 📋 帖子列表展示
-- 🔍 内容搜索
-- 💬 评论查看
-- 📱 响应式设计
+## 功能亮点
 
-## 🚀 在线访问
+- 📰 文章列表分页加载（读取静态 `posts-*.json`）
+- 🔎 关键词搜索 + 搜索历史
+- ✍️ 添加文章：自动草稿、快捷键发布（Ctrl/Cmd + Enter）
+- ☁️ 可选 Gist 文件同步（非必须）
+- 💬 详情页评论发布与排序（最早/最新）
 
-[GitHub Pages](https://zhovy.github.io/gshmd/)
+## 本地运行
 
-## 🛠 本地开发
-
-### 环境要求
-- Java 17+
-- Maven 3.6+
-- MySQL 8.0+
-
-### 运行步骤
-
-1. 创建数据库
-```sql
-CREATE DATABASE gshmd CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-2. 配置数据库连接
-编辑 `src/main/resources/application.yml`：
-```yaml
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/gshmd
-    username: your_username
-    password: your_password
-```
-
-3. 运行应用
 ```bash
 ./mvnw spring-boot:run
 ```
 
-4. 访问 http://localhost:8080
+访问：`http://localhost:8080/index.html`
 
-## 📦 部署到 GitHub Pages
+## 数据存储策略
 
-### 1. 导出数据库数据
+- **静态只读数据**：`src/main/resources/static/posts-*.json`、`comments/*.json`
+- **用户新增文章**：浏览器 `localStorage`（键：`gshmd_local_posts_v3`）
+- **用户新增评论**：浏览器 `localStorage`（键：`gshmd_local_comments_v1`）
+- **草稿**：浏览器 `localStorage`（键：`gshmd_post_draft_v1`）
+- **可选云端同步**：GitHub Gist 文件（需手动配置 token）
 
-```bash
-./mvnw spring-boot:run -Dspring-boot.run.mainClass=com.example.viewer.ExportData
-```
+## 说明
 
-### 2. 提交并推送
-
-```bash
-git add .
-git commit -m "Deploy to GitHub Pages"
-git push origin main
-```
-
-GitHub Actions 会自动构建并部署到 GitHub Pages。
-
-## 📁 项目结构
-
-```
-src/
-├── main/
-│   ├── java/com/example/viewer/
-│   │   ├── GshmdApplication.java    # 主应用
-│   │   ├── controller/               # 控制器
-│   │   ├── entity/                   # 实体类
-│   │   └── mapper/                   # MyBatis Mapper
-│   └── resources/
-│       ├── static/                   # 静态文件 (GitHub Pages)
-│       │   ├── index.html           # 列表页
-│       │   ├── post.html            # 详情页
-│       │   └── data.json            # 导出数据
-│       ├── templates/                # Thymeleaf 模板
-│       └── application.yml           # 配置文件
-```
-
-## 📝 许可证
-
-MIT
+该项目现已改造为静态优先架构，适合部署在 GitHub Pages 或任意静态托管环境。
